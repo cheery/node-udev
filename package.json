@@ -1,0 +1,22 @@
+{
+  "name": "udev",
+  "version": "0.1.0",
+  "description": "Bindings to libudev",
+  "main": "udev.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "install": "node-gyp rebuild"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cheery/node-udev"
+  },
+  "keywords": [
+    "udev",
+    "linux"
+  ],
+  "author": "Henri Tuhola <henri.tuhola@gmail.com>",
+  "license": "BSD",
+  "gypfile": true,
+  "readmeFilename": "README.md"
+}

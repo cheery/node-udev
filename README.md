@@ -8,6 +8,11 @@ Requires node-v0.8.0 and libudev.
 
     npm install udev
 
+### Installation on debian/ubuntu
+
+    sudo apt-get install libudev-dev
+    npm install udev
+
 ## How to Use
 
     var udev = require("udev");

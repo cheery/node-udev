@@ -28,81 +28,81 @@ class Monitor : public node::ObjectWrap {
     struct poll_struct {
         Persistent<Object> monitor;
     };
-    public:
-    static void Init(Handle<Object> target) {
-        Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
-        tpl->SetClassName(NanNew<String>("Monitor"));
-        tpl->InstanceTemplate()->SetInternalFieldCount(1);
-        tpl->PrototypeTemplate()->Set(
-            NanNew<String>("close"),
-            NanNew<FunctionTemplate>(Close)->GetFunction());
-        Persistent<Function> constructor = 
-            Persistent<Function>::New(tpl->GetFunction());
-        target->Set(NanNew<String>("Monitor"), constructor);
-    };
-    private:
-    static void on_handle_close(uv_handle_t *handle) {
-        poll_struct* data = (poll_struct*)handle->data;
-        data->monitor.Dispose();
-        delete data;
-        delete handle;
+
+//    uv_poll_t* poll_handle;
+//    udev_monitor* mon;
+//    int fd;
+//
+//    static void on_handle_event(uv_poll_t* handle, int status, int events) {
+//        HandleScope scope;
+//        poll_struct* data = (poll_struct*)handle->data;
+//        Monitor* wrapper = ObjectWrap::Unwrap<Monitor>(data->monitor);
+//        udev_device* dev = udev_monitor_receive_device(wrapper->mon);
+//
+//        Local<Object> obj = NanNew<Object>();
+//        obj->Set(NanNew<String>("syspath"), NanNew<String>(udev_device_get_syspath(dev)));
+//        PushProperties(obj, dev);
+//
+//        TryCatch tc;
+//        Local<Value> emit_v = data->monitor->Get(NanNew<String>("emit"));
+//        Local<Function> emit = Local<Function>::Cast(emit_v);
+//        Local<Value> emitArgs[2];
+//        emitArgs[0] = NanNew<String>(udev_device_get_action(dev));
+//        emitArgs[1] = obj;
+//        emit->Call(data->monitor, 2, emitArgs);
+//
+//        udev_device_unref(dev);
+//        if (tc.HasCaught()) node::FatalException(tc);
+//    };
+
+    static NAN_METHOD(New) {
+        NanScope();
+//        uv_poll_t* handle;
+        Monitor* obj = new Monitor();
+        obj->Wrap(args.This());
+//        obj->mon = udev_monitor_new_from_netlink(udev, "udev");
+//        obj->fd = udev_monitor_get_fd(obj->mon);
+//        obj->poll_handle = handle = new uv_poll_t;
+//        udev_monitor_enable_receiving(obj->mon);
+//        poll_struct* data = new poll_struct;
+//        data->monitor = Persistent<Object>::New(args.This());
+//        handle->data = data;
+//        uv_poll_init(uv_default_loop(), obj->poll_handle, obj->fd);
+//        uv_poll_start(obj->poll_handle, UV_READABLE, on_handle_event);
+        NanReturnThis();
     }
 
-    static void on_handle_event(uv_poll_t* handle, int status, int events) {
-        HandleScope scope;
-        poll_struct* data = (poll_struct*)handle->data;
-        Monitor* wrapper = ObjectWrap::Unwrap<Monitor>(data->monitor);
-        udev_device* dev = udev_monitor_receive_device(wrapper->mon);
+//    static void on_handle_close(uv_handle_t *handle) {
+//        poll_struct* data = (poll_struct*)handle->data;
+//        data->monitor.Dispose();
+//        delete data;
+//        delete handle;
+//    }
 
-        Local<Object> obj = NanNew<Object>();
-        obj->Set(NanNew<String>("syspath"), NanNew<String>(udev_device_get_syspath(dev)));
-        PushProperties(obj, dev);
-
-        TryCatch tc;
-        Local<Value> emit_v = data->monitor->Get(NanNew<String>("emit"));
-        Local<Function> emit = Local<Function>::Cast(emit_v);
-        Local<Value> emitArgs[2];
-        emitArgs[0] = NanNew<String>(udev_device_get_action(dev));
-        emitArgs[1] = obj;
-        emit->Call(data->monitor, 2, emitArgs);
-
-        udev_device_unref(dev);
-        if (tc.HasCaught()) node::FatalException(tc);
-    };
-    static Handle<Value> New(const Arguments& args) {
-        HandleScope scope;
-        uv_poll_t* handle;
-        Monitor* obj = new Monitor();
-        obj->mon = udev_monitor_new_from_netlink(udev, "udev");
-        udev_monitor_enable_receiving(obj->mon);
-        obj->fd = udev_monitor_get_fd(obj->mon);
-        obj->poll_handle = handle = new uv_poll_t;
-        obj->Wrap(args.This());
-
-        poll_struct* data = new poll_struct;
-        data->monitor = Persistent<Object>::New(args.This());
-        handle->data = data;
-        uv_poll_init(uv_default_loop(), obj->poll_handle, obj->fd);
-        uv_poll_start(obj->poll_handle, UV_READABLE, on_handle_event);
-        return args.This();
-    };
-    static Handle<Value> Close(const Arguments& args) {
-        HandleScope scope;
+    static NAN_METHOD(Close) {
+        NanScope();
         Monitor* obj = ObjectWrap::Unwrap<Monitor>(args.This());
-        uv_poll_stop(obj->poll_handle);
-        uv_close((uv_handle_t*)obj->poll_handle, on_handle_close);
-        udev_monitor_unref(obj->mon);
-        return scope.Close(Undefined());
-    };
-    uv_poll_t* poll_handle;
-    udev_monitor* mon;
-    int fd;
+//        uv_poll_stop(obj->poll_handle);
+//        uv_close((uv_handle_t*)obj->poll_handle, on_handle_close);
+//        udev_monitor_unref(obj->mon);
+        NanReturnUndefined();
+    }
+
+    public:
+    static void Init(Handle<Object> target) {
+        static Persistent<FunctionTemplate> constructor;
+        Local<FunctionTemplate> tpl = NanNew<FunctionTemplate>(New);
+        tpl->SetClassName(NanNew<String>("Monitor"));
+        tpl->InstanceTemplate()->SetInternalFieldCount(1);
+        NODE_SET_PROTOTYPE_METHOD(tpl, "close", Close);
+        NanAssignPersistent(constructor, tpl);
+        target->Set(NanNew<String>("Monitor"), constructor->GetFunction());
+    }
 };
 
-static Handle<Value> List(const Arguments& args) {
-    HandleScope scope;
+NAN_METHOD(List) {
+    NanScope();
     Local<Array> list = NanNew<Array>();
-
     struct udev_enumerate* enumerate;
     struct udev_list_entry* devices;
     struct udev_list_entry* entry;
@@ -126,8 +126,7 @@ static Handle<Value> List(const Arguments& args) {
     }
 
     udev_enumerate_unref(enumerate);
-
-    return scope.Close(list);
+    NanReturnValue(list);
 }
 
 static void Init(Handle<Object> target) {

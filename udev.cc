@@ -29,62 +29,61 @@ class Monitor : public node::ObjectWrap {
         Persistent<Object> monitor;
     };
 
-//    uv_poll_t* poll_handle;
-//    udev_monitor* mon;
-//    int fd;
-//
-//    static void on_handle_event(uv_poll_t* handle, int status, int events) {
-//        HandleScope scope;
-//        poll_struct* data = (poll_struct*)handle->data;
-//        Monitor* wrapper = ObjectWrap::Unwrap<Monitor>(data->monitor);
-//        udev_device* dev = udev_monitor_receive_device(wrapper->mon);
-//
-//        Local<Object> obj = NanNew<Object>();
-//        obj->Set(NanNew<String>("syspath"), NanNew<String>(udev_device_get_syspath(dev)));
-//        PushProperties(obj, dev);
-//
-//        TryCatch tc;
-//        Local<Value> emit_v = data->monitor->Get(NanNew<String>("emit"));
-//        Local<Function> emit = Local<Function>::Cast(emit_v);
-//        Local<Value> emitArgs[2];
-//        emitArgs[0] = NanNew<String>(udev_device_get_action(dev));
-//        emitArgs[1] = obj;
-//        emit->Call(data->monitor, 2, emitArgs);
-//
-//        udev_device_unref(dev);
-//        if (tc.HasCaught()) node::FatalException(tc);
-//    };
+    uv_poll_t* poll_handle;
+    udev_monitor* mon;
+    int fd;
+
+    static void on_handle_event(uv_poll_t* handle, int status, int events) {
+        HandleScope scope;
+        poll_struct* data = (poll_struct*)handle->data;
+        Monitor* wrapper = ObjectWrap::Unwrap<Monitor>(data->monitor);
+        udev_device* dev = udev_monitor_receive_device(wrapper->mon);
+
+        Local<Object> obj = NanNew<Object>();
+        obj->Set(NanNew<String>("syspath"), NanNew<String>(udev_device_get_syspath(dev)));
+        PushProperties(obj, dev);
+
+        TryCatch tc;
+        Local<Function> emit = data->monitor->Get(NanNew<String>("emit")).As<Function>();
+        Local<Value> emitArgs[2];
+        emitArgs[0] = NanNew<String>(udev_device_get_action(dev));
+        emitArgs[1] = obj;
+        emit->Call(data->monitor, 2, emitArgs);
+
+        udev_device_unref(dev);
+        if (tc.HasCaught()) node::FatalException(tc);
+    };
 
     static NAN_METHOD(New) {
         NanScope();
-//        uv_poll_t* handle;
+        uv_poll_t* handle;
         Monitor* obj = new Monitor();
         obj->Wrap(args.This());
-//        obj->mon = udev_monitor_new_from_netlink(udev, "udev");
-//        obj->fd = udev_monitor_get_fd(obj->mon);
-//        obj->poll_handle = handle = new uv_poll_t;
-//        udev_monitor_enable_receiving(obj->mon);
-//        poll_struct* data = new poll_struct;
-//        data->monitor = Persistent<Object>::New(args.This());
-//        handle->data = data;
-//        uv_poll_init(uv_default_loop(), obj->poll_handle, obj->fd);
-//        uv_poll_start(obj->poll_handle, UV_READABLE, on_handle_event);
+        obj->mon = udev_monitor_new_from_netlink(udev, "udev");
+        obj->fd = udev_monitor_get_fd(obj->mon);
+        obj->poll_handle = handle = new uv_poll_t;
+        udev_monitor_enable_receiving(obj->mon);
+        poll_struct* data = new poll_struct;
+        NanAssignPersistent(data->monitor, args.This());
+        handle->data = data;
+        uv_poll_init(uv_default_loop(), obj->poll_handle, obj->fd);
+        uv_poll_start(obj->poll_handle, UV_READABLE, on_handle_event);
         NanReturnThis();
     }
 
-//    static void on_handle_close(uv_handle_t *handle) {
-//        poll_struct* data = (poll_struct*)handle->data;
-//        data->monitor.Dispose();
-//        delete data;
-//        delete handle;
-//    }
+    static void on_handle_close(uv_handle_t *handle) {
+        poll_struct* data = (poll_struct*)handle->data;
+        data->monitor.Dispose();
+        delete data;
+        delete handle;
+    }
 
     static NAN_METHOD(Close) {
         NanScope();
         Monitor* obj = ObjectWrap::Unwrap<Monitor>(args.This());
-//        uv_poll_stop(obj->poll_handle);
-//        uv_close((uv_handle_t*)obj->poll_handle, on_handle_close);
-//        udev_monitor_unref(obj->mon);
+        uv_poll_stop(obj->poll_handle);
+        uv_close((uv_handle_t*)obj->poll_handle, on_handle_close);
+        udev_monitor_unref(obj->mon);
         NanReturnUndefined();
     }
 

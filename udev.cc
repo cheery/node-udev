@@ -1,5 +1,6 @@
 #include <v8.h>
 #include <node.h>
+#include <nan.h>
 
 #include <libudev.h>
 
@@ -16,9 +17,9 @@ static void PushProperties(Local<Object> obj, struct udev_device* dev) {
         name = udev_list_entry_get_name(entry);
         value = udev_list_entry_get_value(entry);
         if (value != NULL) {
-            obj->Set(String::New(name), String::New(value));
+            obj->Set(NanNew<String>(name), NanNew<String>(value));
         } else {
-            obj->Set(String::New(name), Null());
+            obj->Set(NanNew<String>(name), NanNull());
         }
     }
 }
@@ -30,12 +31,14 @@ class Monitor : public node::ObjectWrap {
     public:
     static void Init(Handle<Object> target) {
         Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
-        tpl->SetClassName(String::NewSymbol("Monitor"));
+        tpl->SetClassName(NanNew<String>("Monitor"));
         tpl->InstanceTemplate()->SetInternalFieldCount(1);
-        tpl->PrototypeTemplate()->Set(String::NewSymbol("close"),
-            FunctionTemplate::New(Close)->GetFunction());
-        Persistent<Function> constructor = Persistent<Function>::New(tpl->GetFunction());
-        target->Set(String::NewSymbol("Monitor"), constructor);
+        tpl->PrototypeTemplate()->Set(
+            NanNew<String>("close"),
+            NanNew<FunctionTemplate>(Close)->GetFunction());
+        Persistent<Function> constructor = 
+            Persistent<Function>::New(tpl->GetFunction());
+        target->Set(NanNew<String>("Monitor"), constructor);
     };
     private:
     static void on_handle_close(uv_handle_t *handle) {
@@ -51,15 +54,15 @@ class Monitor : public node::ObjectWrap {
         Monitor* wrapper = ObjectWrap::Unwrap<Monitor>(data->monitor);
         udev_device* dev = udev_monitor_receive_device(wrapper->mon);
 
-        Local<Object> obj = Object::New();
-        obj->Set(String::NewSymbol("syspath"), String::New(udev_device_get_syspath(dev)));
+        Local<Object> obj = NanNew<Object>();
+        obj->Set(NanNew<String>("syspath"), NanNew<String>(udev_device_get_syspath(dev)));
         PushProperties(obj, dev);
 
         TryCatch tc;
-        Local<Value> emit_v = data->monitor->Get(String::NewSymbol("emit"));
+        Local<Value> emit_v = data->monitor->Get(NanNew<String>("emit"));
         Local<Function> emit = Local<Function>::Cast(emit_v);
         Local<Value> emitArgs[2];
-        emitArgs[0] = String::NewSymbol(udev_device_get_action(dev));
+        emitArgs[0] = NanNew<String>(udev_device_get_action(dev));
         emitArgs[1] = obj;
         emit->Call(data->monitor, 2, emitArgs);
 
@@ -98,7 +101,7 @@ class Monitor : public node::ObjectWrap {
 
 static Handle<Value> List(const Arguments& args) {
     HandleScope scope;
-    Local<Array> list = Array::New();
+    Local<Array> list = NanNew<Array>();
 
     struct udev_enumerate* enumerate;
     struct udev_list_entry* devices;
@@ -115,9 +118,9 @@ static Handle<Value> List(const Arguments& args) {
         const char *path;
         path = udev_list_entry_get_name(entry);
         dev = udev_device_new_from_syspath(udev, path);
-        Local<Object> obj = Object::New();
+        Local<Object> obj = NanNew<Object>();
         PushProperties(obj, dev);
-        obj->Set(String::NewSymbol("syspath"), String::New(path));
+        obj->Set(NanNew<String>("syspath"), NanNew<String>(path));
         list->Set(i++, obj);
         udev_device_unref(dev);
     }
@@ -130,10 +133,12 @@ static Handle<Value> List(const Arguments& args) {
 static void Init(Handle<Object> target) {
     udev = udev_new();
     if (!udev) {
-        ThrowException(String::New("Can't create udev\n"));
+        NanThrowError("Can't create udev\n");
     }
-    target->Set(String::NewSymbol("list"),
-        FunctionTemplate::New(List)->GetFunction());
+    target->Set(
+        NanNew<String>("list"),
+        NanNew<FunctionTemplate>(List)->GetFunction());
+
     Monitor::Init(target);
 }
 NODE_MODULE(udev, Init)

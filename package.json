@@ -21,5 +21,8 @@
   "author": "Henri Tuhola <henri.tuhola@gmail.com>",
   "license": "BSD",
   "gypfile": true,
-  "readmeFilename": "README.md"
+  "readmeFilename": "README.md",
+  "dependencies": {
+    "nan": "~1.7.0"
+  }
 }

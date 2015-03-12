@@ -6,6 +6,9 @@
             "libraries": [
                 "-ludev",
             ],
+            "include_dirs" : [
+                "<!(node -e \"require('nan')\")"
+            ]
         }
     ]
 }

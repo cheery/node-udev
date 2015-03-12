@@ -73,7 +73,7 @@ class Monitor : public node::ObjectWrap {
 
     static void on_handle_close(uv_handle_t *handle) {
         poll_struct* data = (poll_struct*)handle->data;
-        data->monitor.Dispose();
+        NanDisposePersistent(data->monitor);
         delete data;
         delete handle;
     }

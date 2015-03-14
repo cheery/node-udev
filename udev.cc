@@ -34,9 +34,10 @@ class Monitor : public node::ObjectWrap {
     int fd;
 
     static void on_handle_event(uv_poll_t* handle, int status, int events) {
-        HandleScope scope;
+        NanScope();
         poll_struct* data = (poll_struct*)handle->data;
-        Monitor* wrapper = ObjectWrap::Unwrap<Monitor>(data->monitor);
+        Local<Object> monitor = NanNew(data->monitor);
+        Monitor* wrapper = ObjectWrap::Unwrap<Monitor>(monitor);
         udev_device* dev = udev_monitor_receive_device(wrapper->mon);
 
         Local<Object> obj = NanNew<Object>();
@@ -44,11 +45,11 @@ class Monitor : public node::ObjectWrap {
         PushProperties(obj, dev);
 
         TryCatch tc;
-        Local<Function> emit = data->monitor->Get(NanNew<String>("emit")).As<Function>();
+        Local<Function> emit = monitor->Get(NanNew<String>("emit")).As<Function>();
         Local<Value> emitArgs[2];
         emitArgs[0] = NanNew<String>(udev_device_get_action(dev));
         emitArgs[1] = obj;
-        emit->Call(data->monitor, 2, emitArgs);
+        emit->Call(monitor, 2, emitArgs);
 
         udev_device_unref(dev);
         if (tc.HasCaught()) node::FatalException(tc);
@@ -89,13 +90,14 @@ class Monitor : public node::ObjectWrap {
 
     public:
     static void Init(Handle<Object> target) {
+        // I do not remember why the functiontemplate was tugged into a persistent.
         static Persistent<FunctionTemplate> constructor;
         Local<FunctionTemplate> tpl = NanNew<FunctionTemplate>(New);
         tpl->SetClassName(NanNew<String>("Monitor"));
         tpl->InstanceTemplate()->SetInternalFieldCount(1);
         NODE_SET_PROTOTYPE_METHOD(tpl, "close", Close);
         NanAssignPersistent(constructor, tpl);
-        target->Set(NanNew<String>("Monitor"), constructor->GetFunction());
+        target->Set(NanNew<String>("Monitor"), NanNew(tpl)->GetFunction());
     }
 };
 

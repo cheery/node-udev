@@ -23,6 +23,6 @@
   "gypfile": true,
   "readmeFilename": "README.md",
   "dependencies": {
-    "nan": "~1.7.0"
+    "nan": "~1.8.4"
   }
 }

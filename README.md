@@ -15,6 +15,8 @@ Requires node-v0.8.0, nan and libudev.
 
 ## How to Use
 
+The example below lists devices and monitors udev events and closes its monitor when receiving an add -event. The code is separately listed in `samples/howto.js`.
+
     var udev = require("udev");
 
     console.log(udev.list()); // this is a long list :)

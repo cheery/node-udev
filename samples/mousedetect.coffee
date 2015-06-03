@@ -1,4 +1,7 @@
-udev = require('./udev')
+# Demonstrates how to detect some non-edible mice.
+#
+# The code is written in coffeescript. I prefer it over javascript.
+udev = require('../udev')
 
 ismouse = (device) ->
     ok = true
@@ -16,6 +19,7 @@ console.log "this program should halt when you remove one of your mice"
 
 monitor = udev.monitor()
 
+# 'add' and 'change' events produce the same device structure.
 monitor.on 'remove', (device) ->
     if ismouse device
         console.log "#{device.ID_SERIAL} unplugged from #{device.ID_PATH}"

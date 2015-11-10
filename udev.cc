@@ -130,6 +130,39 @@ NAN_METHOD(List) {
     NanReturnValue(list);
 }
 
+NAN_METHOD(GetNodeParentBySyspath) {
+    NanScope();
+    struct udev_device *dev;
+    struct udev_device *parentDev;
+
+    if(!args[0]->IsString()) {
+        NanThrowTypeError("first argument must be a string");
+        NanReturnNull();
+    }
+
+    v8::Local<v8::String> string = args[0]->ToString();
+
+    dev = udev_device_new_from_syspath(udev, *NanUtf8String(string));
+    if (dev == NULL) {
+        NanThrowError("device not found");
+        NanReturnNull();
+    }
+    parentDev = udev_device_get_parent(dev);
+    if(parentDev == NULL) {
+        udev_device_unref(dev);
+        NanReturnNull();
+    }
+
+    Local<Object> obj = NanNew<Object>();
+    PushProperties(obj, parentDev);
+    const char *path;
+    path = udev_device_get_syspath(parentDev);
+    obj->Set(NanNew<String>("syspath"), NanNew<String>(path));
+    udev_device_unref(dev);
+
+    NanReturnValue(obj);
+}
+
 static void Init(Handle<Object> target) {
     udev = udev_new();
     if (!udev) {
@@ -138,6 +171,9 @@ static void Init(Handle<Object> target) {
     target->Set(
         NanNew<String>("list"),
         NanNew<FunctionTemplate>(List)->GetFunction());
+    target->Set(
+        NanNew<String>("getNodeParentBySyspath"),
+        NanNew<FunctionTemplate>(GetNodeParentBySyspath)->GetFunction());
 
     Monitor::Init(target);
 }

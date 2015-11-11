@@ -5,6 +5,7 @@ udev.Monitor.prototype.__proto__ = EventEmitter.prototype;
 
 module.exports = {
     monitor: function() { return new udev.Monitor(); },
-    list: udev.list, 
+    list: udev.list,
     getNodeParentBySyspath: udev.getNodeParentBySyspath,
+    getSysattrBySyspath: udev.getSysattrBySyspath,
 }

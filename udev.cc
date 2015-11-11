@@ -24,6 +24,22 @@ static void PushProperties(Local<Object> obj, struct udev_device* dev) {
     }
 }
 
+static void PushSystemAttributes(Local<Object> obj, struct udev_device* dev) {
+    struct udev_list_entry* sysattrs;
+    struct udev_list_entry* entry;
+    sysattrs = udev_device_get_sysattr_list_entry(dev);
+    udev_list_entry_foreach(entry, sysattrs) {
+        const char *name, *value;
+        name = udev_list_entry_get_name(entry);
+        value = udev_device_get_sysattr_value(dev, name);
+        if (value != NULL) {
+            obj->Set(NanNew<String>(name), NanNew<String>(value));
+        } else {
+            obj->Set(NanNew<String>(name), NanNull());
+        }
+    }
+}
+
 class Monitor : public node::ObjectWrap {
     struct poll_struct {
         Persistent<Object> monitor;
@@ -163,6 +179,31 @@ NAN_METHOD(GetNodeParentBySyspath) {
     NanReturnValue(obj);
 }
 
+NAN_METHOD(GetSysattrBySyspath) {
+    NanScope();
+    struct udev_device *dev;
+
+    if(!args[0]->IsString()) {
+        NanThrowTypeError("first argument must be a string");
+        NanReturnNull();
+    }
+
+    v8::Local<v8::String> string = args[0]->ToString();
+
+    dev = udev_device_new_from_syspath(udev, *NanUtf8String(string));
+    if (dev == NULL) {
+        NanThrowError("device not found");
+        NanReturnNull();
+    }
+
+    Local<Object> obj = NanNew<Object>();
+    PushSystemAttributes(obj, dev);
+    obj->Set(NanNew<String>("syspath"), string);
+    udev_device_unref(dev);
+
+    NanReturnValue(obj);
+}
+
 static void Init(Handle<Object> target) {
     udev = udev_new();
     if (!udev) {
@@ -174,6 +215,9 @@ static void Init(Handle<Object> target) {
     target->Set(
         NanNew<String>("getNodeParentBySyspath"),
         NanNew<FunctionTemplate>(GetNodeParentBySyspath)->GetFunction());
+    target->Set(
+        NanNew<String>("getSysattrBySyspath"),
+        NanNew<FunctionTemplate>(GetSysattrBySyspath)->GetFunction());
 
     Monitor::Init(target);
 }

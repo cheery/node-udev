@@ -110,7 +110,9 @@ class Monitor : public node::ObjectWrap {
     static void Init(Handle<Object> target) {
         // I do not remember why the functiontemplate was tugged into a persistent.
         static Nan::Persistent<FunctionTemplate> constructor;
-        Local<FunctionTemplate> tpl = Nan::New<FunctionTemplate>(New);
+
+        //Local<FunctionTemplate> tpl = Nan::New<FunctionTemplate>(New);
+        Local<v8::FunctionTemplate> tpl = Nan::New<v8::FunctionTemplate>(New);
         tpl->SetClassName(Nan::New<String>("Monitor").ToLocalChecked());
         tpl->InstanceTemplate()->SetInternalFieldCount(1);
         //NODE_SET_PROTOTYPE_METHOD(tpl, "close", Close);
@@ -118,9 +120,12 @@ class Monitor : public node::ObjectWrap {
         //NanAssignPersistent(constructor, tpl);
         constructor.Reset(tpl);
 
-        target->Set(
+        //target->Set(
+        Nan::Set(
+            target,
             Nan::New<String>("Monitor").ToLocalChecked(), 
-            Nan::New(tpl)->GetFunction()
+            //Nan::New(tpl)->GetFunction()
+            Nan::GetFunction(Nan::New(tpl)).ToLocalChecked()
         );
     }
 };
@@ -147,12 +152,15 @@ NAN_METHOD(List) {
         Local<Object> obj = Nan::New<Object>();
         PushProperties(obj, dev);
 
-        obj->Set(
+        //obj->Set(
+        Nan::Set(
+            obj,
             Nan::New<String>("syspath").ToLocalChecked(), 
             Nan::New<String>(path).ToLocalChecked()
         );
 
-        list->Set(i++, obj);
+        //list->Set(i++, obj);
+        Nan::Set(list, i++, obj);
         udev_device_unref(dev);
     }
 
@@ -187,7 +195,9 @@ NAN_METHOD(GetNodeParentBySyspath) {
     const char *path;
     path = udev_device_get_syspath(parentDev);
 
-    obj->Set(
+    //obj->Set(
+    Nan::Set(
+        obj,
         Nan::New<String>("syspath").ToLocalChecked(), 
         Nan::New<String>(path).ToLocalChecked()
     );

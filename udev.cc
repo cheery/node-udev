@@ -124,8 +124,7 @@ class Monitor : public node::ObjectWrap {
         Nan::Set(
             target,
             Nan::New<String>("Monitor").ToLocalChecked(), 
-            //Nan::New(tpl)->GetFunction()
-            Nan::GetFunction(Nan::New(tpl)).ToLocalChecked()
+            Nan::GetFunction(tpl).ToLocalChecked()
         );
     }
 };

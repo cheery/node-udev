@@ -1,7 +1,9 @@
 node_modules/
 build/
+.vagrant/
 
 npm-debug.log
+Vagrantfile
 
 # VIM related files
 *.swo

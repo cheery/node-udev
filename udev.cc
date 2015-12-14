@@ -67,7 +67,6 @@ class Monitor : public node::ObjectWrap {
         emit->Call(monitor, 2, emitArgs);
 
         udev_device_unref(dev);
-        //if (tc.HasCaught()) node::FatalException(tc);
     };
 
     static NAN_METHOD(New) {

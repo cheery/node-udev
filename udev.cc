@@ -139,6 +139,10 @@ NAN_METHOD(List) {
 
     enumerate = udev_enumerate_new(udev);
     // add match etc. stuff.
+    if(info[0]->IsString()) {
+        v8::Local<v8::String> subsystem = info[0]->ToString();
+  	    udev_enumerate_add_match_subsystem(enumerate, *Nan::Utf8String(subsystem));
+    }
     udev_enumerate_scan_devices(enumerate);
     devices = udev_enumerate_get_list_entry(enumerate);
 

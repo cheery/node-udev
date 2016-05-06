@@ -32,3 +32,13 @@ The example below lists devices and monitors udev events and closes its monitor 
     monitor.on('change', function (device) {
         console.log('changed ' + device);
     });
+    
+The example below lists devices belonging to subsystem "tty" i.e. various serial ports.
+
+    var udev = require("udev");
+    console.log(udev.list(tty));
+    
+    
+
+    
+

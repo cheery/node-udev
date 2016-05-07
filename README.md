@@ -37,8 +37,3 @@ The example below lists devices belonging to subsystem "tty" i.e. various serial
 
     var udev = require("udev");
     console.log(udev.list(tty));
-    
-    
-
-    
-

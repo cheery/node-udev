@@ -18,6 +18,7 @@
     "udev",
     "linux"
   ],
+  "os" : [ "linux" ],
   "author": "Henri Tuhola <henri.tuhola@gmail.com>",
   "license": "BSD",
   "gypfile": true,

@@ -1,6 +1,6 @@
 {
   "name": "udev",
-  "version": "0.1.5",
+  "version": "0.3.0",
   "description": "Bindings to libudev",
   "main": "udev.js",
   "scripts": {
@@ -24,7 +24,9 @@
     "udev",
     "linux"
   ],
-  "os" : [ "linux" ],
+  "os": [
+    "linux"
+  ],
   "author": "Henri Tuhola <henri.tuhola@gmail.com>",
   "license": "BSD",
   "gypfile": true,

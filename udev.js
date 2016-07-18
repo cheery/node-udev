@@ -1,5 +1,8 @@
-var udev = require('./build/Release/udev'),
-  EventEmitter = require('events').EventEmitter;
+var binary = require('node-pre-gyp');
+var path = require('path');
+var binding_path = binary.find(path.resolve(path.join(__dirname,'./package.json')));
+var udev = require(binding_path);
+var EventEmitter = require('events').EventEmitter;
 
 
 var getDetailedNodeChain = function (node) {

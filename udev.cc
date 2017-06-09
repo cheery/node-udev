@@ -59,7 +59,6 @@ class Monitor : public node::ObjectWrap {
         obj->Set(Nan::New<String>("syspath").ToLocalChecked(), Nan::New<String>(udev_device_get_syspath(dev)).ToLocalChecked());
         PushProperties(obj, dev);
 
-        TryCatch tc;
         Local<Function> emit = monitor->Get(Nan::New<String>("emit").ToLocalChecked()).As<Function>();
         Local<Value> emitArgs[2];
         emitArgs[0] = Nan::New<String>(udev_device_get_action(dev)).ToLocalChecked();

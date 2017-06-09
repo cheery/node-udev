@@ -28,7 +28,7 @@
     "linux"
   ],
   "author": "Henri Tuhola <henri.tuhola@gmail.com>",
-  "license": "BSD",
+  "license": "BSD-2-Clause",
   "gypfile": true,
   "readmeFilename": "README.md",
   "dependencies": {

@@ -44,8 +44,8 @@ udev.Monitor.prototype.__proto__ = EventEmitter.prototype;
 
 
 module.exports = {
-  monitor: function () {
-    return new udev.Monitor();
+  monitor: function (subsystem) {
+    return new udev.Monitor(subsystem);
   },
   list: udev.list,
   getNodeParentBySyspath: udev.getNodeParentBySyspath,

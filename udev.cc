@@ -76,6 +76,17 @@ class Monitor : public node::ObjectWrap {
         obj->mon = udev_monitor_new_from_netlink(udev, "udev");
         obj->fd = udev_monitor_get_fd(obj->mon);
         obj->poll_handle = handle = new uv_poll_t;
+
+        if (info[0]->IsString()) {
+            v8::Local<v8::String> subsystem = info[0]->ToString();
+            int r;
+            r = udev_monitor_filter_add_match_subsystem_devtype(obj->mon,
+                    *Nan::Utf8String(subsystem), NULL);
+            if (r < 0) {
+                Nan::ThrowError("adding the subsystem filter failed");
+            }
+        }
+
         udev_monitor_enable_receiving(obj->mon);
         poll_struct* data = new poll_struct;
         //NanAssignPersistent(data->monitor, info.This());
@@ -140,7 +151,7 @@ NAN_METHOD(List) {
     // add match etc. stuff.
     if(info[0]->IsString()) {
         v8::Local<v8::String> subsystem = info[0]->ToString();
-  	    udev_enumerate_add_match_subsystem(enumerate, *Nan::Utf8String(subsystem));
+        udev_enumerate_add_match_subsystem(enumerate, *Nan::Utf8String(subsystem));
     }
     udev_enumerate_scan_devices(enumerate);
     devices = udev_enumerate_get_list_entry(enumerate);

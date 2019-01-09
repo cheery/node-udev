@@ -5,8 +5,8 @@ var udev = require("../udev");
 // Lists every device in the system.
 console.log(udev.list()); // this is a long list :)
 
-// Opens a monitor that closes when it receives an add -event.
-var monitor = udev.monitor();
+// Monitor events on the input subsystem until a device is added.
+var monitor = udev.monitor("input");
 monitor.on('add', function (device) {
     console.log('added ' + device);
     monitor.close() // this closes the monitor

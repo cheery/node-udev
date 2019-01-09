@@ -15,13 +15,13 @@ Requires node-v0.8.0, nan and libudev.
 
 ## How to Use
 
-The example below lists devices and monitors udev events and closes its monitor when receiving an add -event. The code is separately listed in `samples/howto.js`.
+The example below lists devices and monitors udev events on the ipnut subsystem until receiving an add event. The code is separately listed in `samples/howto.js`.
 
     var udev = require("udev");
 
     console.log(udev.list()); // this is a long list :)
 
-    var monitor = udev.monitor();
+    var monitor = udev.monitor("input");
     monitor.on('add', function (device) {
         console.log('added ' + device);
         monitor.close() // this closes the monitor.

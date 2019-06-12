@@ -54,6 +54,9 @@ class Monitor : public node::ObjectWrap {
         Local<Object> monitor = Nan::New(data->monitor);
         Monitor* wrapper = ObjectWrap::Unwrap<Monitor>(monitor);
         udev_device* dev = udev_monitor_receive_device(wrapper->mon);
+        if (dev == NULL) {
+                return;
+        }
 
         Local<Object> obj = Nan::New<Object>();
         obj->Set(Nan::New<String>("syspath").ToLocalChecked(), Nan::New<String>(udev_device_get_syspath(dev)).ToLocalChecked());

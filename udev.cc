@@ -55,7 +55,7 @@ class Monitor : public node::ObjectWrap {
         Monitor* wrapper = ObjectWrap::Unwrap<Monitor>(monitor);
         udev_device* dev = udev_monitor_receive_device(wrapper->mon);
         if (dev == NULL) {
-                return;
+            return;
         }
 
         Local<Object> obj = Nan::New<Object>();

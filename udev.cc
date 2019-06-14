@@ -189,6 +189,7 @@ NAN_METHOD(GetNodeParentBySyspath) {
 
     if(!info[0]->IsString()) {
         Nan::ThrowTypeError("first argument must be a string");
+        return;
     }
 
     v8::Local<v8::String> string = info[0]->ToString();
@@ -196,7 +197,9 @@ NAN_METHOD(GetNodeParentBySyspath) {
     dev = udev_device_new_from_syspath(udev, *Nan::Utf8String(string));
     if (dev == NULL) {
         Nan::ThrowError("device not found");
+        return;
     }
+
     parentDev = udev_device_get_parent(dev);
     if(parentDev == NULL) {
         udev_device_unref(dev);
@@ -206,6 +209,11 @@ NAN_METHOD(GetNodeParentBySyspath) {
     PushProperties(obj, parentDev);
     const char *path;
     path = udev_device_get_syspath(parentDev);
+
+    if(!path) {
+        Nan::ThrowError("udev returned null syspath");
+        return;
+    }
 
     //obj->Set(
     Nan::Set(
@@ -228,6 +236,7 @@ NAN_METHOD(GetSysattrBySyspath) {
     if(!info[0]->IsString()) {
       Nan::ThrowTypeError("first argument must be a string");
         //NanReturnNull();
+        return;
     }
 
     v8::Local<v8::String> string = info[0]->ToString();
@@ -235,6 +244,7 @@ NAN_METHOD(GetSysattrBySyspath) {
     dev = udev_device_new_from_syspath(udev, *Nan::Utf8String(string));
     if (dev == NULL) {
       Nan::ThrowError("device not found");
+      return;
     }
 
     Local<Object> obj = Nan::New<Object>();
@@ -251,6 +261,7 @@ static void Init(Handle<Object> target) {
 
     if (!udev) {
       Nan::ThrowError("Can't create udev\n");
+      return;
     }
 
     Nan::Set(

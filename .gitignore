@@ -13,3 +13,5 @@ Vagrantfile
 
 *.old
 *~
+
+.vscode/

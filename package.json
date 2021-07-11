@@ -32,7 +32,7 @@
   "gypfile": true,
   "readmeFilename": "README.md",
   "dependencies": {
-    "nan": "~2.11.0",
-    "node-pre-gyp": "~0.11.0"
+    "node-addon-api": "^4.0.0",
+    "node-pre-gyp": "^0.17.0"
   }
 }

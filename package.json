@@ -1,11 +1,11 @@
 {
   "name": "udev",
-  "version": "0.6.0",
+  "version": "1.0.0",
   "description": "Bindings to libudev",
   "main": "udev.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "install": "node-pre-gyp install --fallback-to-build"
+    "install": "node-pre-gyp reinstall --fallback-to-build"
   },
   "binary": {
     "module_name": "udev",
@@ -32,7 +32,7 @@
   "gypfile": true,
   "readmeFilename": "README.md",
   "dependencies": {
-    "node-addon-api": "^4.0.0",
-    "@mapbox/node-pre-gyp": "^1.0.5"
+    "@mapbox/node-pre-gyp": "^1.0.5",
+    "node-addon-api": "^4.0.0"
   }
 }

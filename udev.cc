@@ -9,6 +9,7 @@ using namespace Napi;
 static struct udev *udev;
 
 static void PushProperties(Napi::Object obj, struct udev_device* dev) {
+    Napi::Env env = obj.Env();
     struct udev_list_entry* sysattrs;
     struct udev_list_entry* entry;
     sysattrs = udev_device_get_properties_list_entry(dev);
@@ -25,6 +26,7 @@ static void PushProperties(Napi::Object obj, struct udev_device* dev) {
 }
 
 static void PushSystemAttributes(Napi::Object obj, struct udev_device* dev) {
+    Napi::Env env = obj.Env();
     struct udev_list_entry* sysattrs;
     struct udev_list_entry* entry;
     sysattrs = udev_device_get_sysattr_list_entry(dev);
@@ -40,7 +42,10 @@ static void PushSystemAttributes(Napi::Object obj, struct udev_device* dev) {
     }
 }
 
-class Monitor : public node::ObjectWrap {
+class Monitor : public Napi::ObjectWrap<Monitor> {
+
+    Monitor();
+
     struct poll_struct {
       Napi::ObjectReference monitor;
     };
@@ -52,8 +57,8 @@ class Monitor : public node::ObjectWrap {
     static void on_handle_event(uv_poll_t* handle, int status, int events) {
         Napi::HandleScope scope(env);
         poll_struct* data = (poll_struct*)handle->data;
-        Napi::Object monitor = Napi::New(env, data->monitor);
-        Monitor* wrapper = ObjectWrap::Unwrap<Monitor>(monitor);
+        Napi::Object monitor = Napi::Object::New(env, data->monitor);
+        Monitor* wrapper = ObjectWrap::Unwrap(monitor);
         udev_device* dev = udev_monitor_receive_device(wrapper->mon);
         if (dev == NULL) {
             return;
@@ -73,19 +78,20 @@ class Monitor : public node::ObjectWrap {
     };
 
     static Napi::Value New(const Napi::CallbackInfo& info) {
+        Napi::Env env = info.Env();
         Napi::HandleScope scope(env);
         uv_poll_t* handle;
         Monitor* obj = new Monitor();
-        obj->Wrap(info.This());
+        // obj->Wrap(info.This());
         obj->mon = udev_monitor_new_from_netlink(udev, "udev");
         obj->fd = udev_monitor_get_fd(obj->mon);
         obj->poll_handle = handle = new uv_poll_t;
 
         if (info[0].IsString()) {
-            Napi::String subsystem = info[0].ToString();
+            Napi::String subsystem = info[0].As<Napi::String>();
             int r;
             r = udev_monitor_filter_add_match_subsystem_devtype(obj->mon,
-                    subsystem->As<Napi::String>().Utf8Value().c_str(), NULL);
+                    subsystem.Utf8Value().c_str(), NULL);
             if (r < 0) {
                 Napi::Error::New(env, "adding the subsystem filter failed").ThrowAsJavaScriptException();
 
@@ -94,57 +100,49 @@ class Monitor : public node::ObjectWrap {
 
         udev_monitor_enable_receiving(obj->mon);
         poll_struct* data = new poll_struct;
-        //NanAssignPersistent(data->monitor, info.This());
-        data->monitor.Reset(info.This());
+        data->monitor.Reset();
         handle->data = data;
         uv_poll_init(uv_default_loop(), obj->poll_handle, obj->fd);
         uv_poll_start(obj->poll_handle, UV_READABLE, on_handle_event);
-        //NanReturnThis();
         return;
     }
 
     static void on_handle_close(uv_handle_t *handle) {
         poll_struct* data = (poll_struct*)handle->data;
-        //NanDisposePersistent(data->monitor);
         data->monitor.Reset();
         delete data;
         delete handle;
     }
 
     static Napi::Value Close(const Napi::CallbackInfo& info) {
+        Napi::Env env = info.Env();
         Napi::HandleScope scope(env);
-        Monitor* obj = ObjectWrap::Unwrap<Monitor>(info.This());
+        Monitor* obj = &info[0].As<Monitor>();
         uv_poll_stop(obj->poll_handle);
         uv_close((uv_handle_t*)obj->poll_handle, on_handle_close);
         udev_monitor_unref(obj->mon);
-        return;
+        return env.Null();
     }
 
     public:
-    static void Init(Handle<Object> target) {
-        // I do not remember why the functiontemplate was tugged into a persistent.
-        static Napi::FunctionReference constructor;
+    static Napi::Object Init(Napi::Env env, Napi::Object exports) {
+        Napi::HandleScope scope(env);
+        Napi::FunctionReference constructor;
+        Napi::Function func = DefineClass(env, "Monitor", {
+            StaticMethod("close", &Monitor::Close)
+        });
 
-        //Napi::FunctionReference tpl = Napi::Function::New(env, New);
-        Local<Napi::FunctionReference> tpl = Napi::Function::New(env, New);
-        tpl->SetClassName(Napi::String::New(env, "Monitor"));
+        constructor = Napi::Persistent(func);
+        constructor.Reset(func);
 
-        //NODE_SET_PROTOTYPE_METHOD(tpl, "close", Close);
-        InstanceMethod("close", &Close),
-        //NanAssignPersistent(constructor, tpl);
-        constructor.Reset(tpl);
-
-        //target.Set(
-        (
-            target).Set(Napi::String::New(env, "Monitor"), 
-            Napi::GetFunction(tpl)
-        );
+        exports.Set(Napi::String::New(env, "Monitor"), func);
+        return exports;
     }
 };
 
 Napi::Value List(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
     Napi::HandleScope scope(env);
-    //NanScope();
     Napi::Array list = Napi::Array::New(env);
     struct udev_enumerate* enumerate;
     struct udev_list_entry* devices;
@@ -154,8 +152,8 @@ Napi::Value List(const Napi::CallbackInfo& info) {
     enumerate = udev_enumerate_new(udev);
     // add match etc. stuff.
     if(info[0].IsString()) {
-        Napi::String subsystem = info[0].ToString();
-        udev_enumerate_add_match_subsystem(enumerate, subsystem->As<Napi::String>().Utf8Value().c_str());
+        Napi::String subsystem = info[0].As<Napi::String>();
+        udev_enumerate_add_match_subsystem(enumerate, subsystem.Utf8Value().c_str());
     }
     udev_enumerate_scan_devices(enumerate);
     devices = udev_enumerate_get_list_entry(enumerate);
@@ -168,23 +166,18 @@ Napi::Value List(const Napi::CallbackInfo& info) {
         Napi::Object obj = Napi::Object::New(env);
         PushProperties(obj, dev);
 
-        //obj.Set(
-        (
-            obj).Set(Napi::String::New(env, "syspath"), 
-            Napi::String::New(env, path)
-        );
+        obj.Set(Napi::String::New(env, "syspath"), Napi::String::New(env, path));
 
-        //list.Set(i++, obj);
-        (list).Set(i++, obj);
+        list.Set(i++, obj);
         udev_device_unref(dev);
     }
 
     udev_enumerate_unref(enumerate);
-    //NanReturnValue(list);
     return list;
 }
 
 Napi::Value GetNodeParentBySyspath(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
     Napi::HandleScope scope(env);
     //NanScope();
     struct udev_device *dev;
@@ -195,9 +188,9 @@ Napi::Value GetNodeParentBySyspath(const Napi::CallbackInfo& info) {
         return env.Null();
     }
 
-    Napi::String string = info[0].ToString();
+    Napi::String string = info[0].As<Napi::String>();
 
-    dev = udev_device_new_from_syspath(udev, string->As<Napi::String>().Utf8Value().c_str());
+    dev = udev_device_new_from_syspath(udev, string.Utf8Value().c_str());
     if (dev == NULL) {
         Napi::Error::New(env, "device not found").ThrowAsJavaScriptException();
         return env.Null();
@@ -231,6 +224,7 @@ Napi::Value GetNodeParentBySyspath(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value GetSysattrBySyspath(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
     Napi::HandleScope scope(env);
     //NanScope();
     struct udev_device *dev;
@@ -242,9 +236,9 @@ Napi::Value GetSysattrBySyspath(const Napi::CallbackInfo& info) {
         return;
     }
 
-    Napi::String string = info[0].ToString();
+    Napi::String string = info[0].As<Napi::String>();
 
-    dev = udev_device_new_from_syspath(udev, string->As<Napi::String>().Utf8Value().c_str());
+    dev = udev_device_new_from_syspath(udev, string.Utf8Value().c_str());
     if (dev == NULL) {
       Napi::Error::New(env, "device not found").ThrowAsJavaScriptException();
       return env.Null();
@@ -259,29 +253,20 @@ Napi::Value GetSysattrBySyspath(const Napi::CallbackInfo& info) {
     return obj;
 }
 
-static void Init(Handle<Object> target) {
+static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     udev = udev_new();
 
     if (!udev) {
       Napi::Error::New(env, "Can't create udev\n").ThrowAsJavaScriptException();
-      return env.Null();
+      return;
     }
 
-    (
-        target).Set(Napi::String::New(env, "list"),
-        Napi::GetFunction(Napi::Function::New(env, List))
-    );
-    (
-        target).Set(Napi::String::New(env, "getNodeParentBySyspath"),
-        Napi::GetFunction(Napi::Function::New(env, GetNodeParentBySyspath))
-    );
-    //target.Set(
-    (
-        target).Set(Napi::String::New(env, "getSysattrBySyspath"),
-        //Napi::Function::New(env, GetSysattrBySyspath);());
-        Napi::GetFunction(Napi::Function::New(env, GetSysattrBySyspath))
-    );
+    exports.Set(Napi::String::New(env, "list"), Napi::Function::New(env, List));
+    exports.Set(Napi::String::New(env, "getNodeParentBySyspath"), Napi::Function::New(env, GetNodeParentBySyspath));
+    exports.Set(Napi::String::New(env, "getSysattrBySyspath"), Napi::Function::New(env, GetSysattrBySyspath));
 
-    Monitor::Init(env, target, module);
+    Monitor::Init(env, exports);
+    return exports;
 }
-NODE_API_MODULE(udev, Init)
+
+NODE_API_MODULE(NODE_GYP_MODULE_NAME, Init)

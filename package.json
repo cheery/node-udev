@@ -1,10 +1,12 @@
 {
   "name": "udev",
-  "version": "0.6.0",
+  "version": "1.0.0",
   "description": "Bindings to libudev",
   "main": "udev.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "node-gyp rebuild",
+    "clean": "node-gyp clean",
     "install": "node-pre-gyp install --fallback-to-build"
   },
   "binary": {
@@ -18,7 +20,7 @@
     "url": "https://github.com/cheery/node-udev"
   },
   "engines": {
-    "node": ">=0.8.0"
+    "node": ">=10.0.0"
   },
   "keywords": [
     "udev",
@@ -31,8 +33,12 @@
   "license": "BSD-2-Clause",
   "gypfile": true,
   "readmeFilename": "README.md",
+  "devDependencies": {
+    "node-gyp": "^8.1.0"
+  },
   "dependencies": {
-    "nan": "~2.11.0",
-    "node-pre-gyp": "~0.11.0"
+    "@mapbox/node-pre-gyp": "^1.0.5",
+    "bindings": "^1.5.0",
+    "node-addon-api": "^4.0.0"
   }
 }

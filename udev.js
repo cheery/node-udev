@@ -1,15 +1,16 @@
-var binary = require('node-pre-gyp');
-var path = require('path');
-var binding_path = binary.find(path.resolve(path.join(__dirname,'./package.json')));
-var udev = require(binding_path);
-var EventEmitter = require('events').EventEmitter;
+const EventEmitter = require('events').EventEmitter;
+const udev = require('bindings')('udev');
+const inherits = require('util').inherits
+
+const Monitor = udev.Monitor;
+inherits(Monitor, EventEmitter);
 
 
-var getDetailedNodeChain = function (node) {
-  var result = [], extra;
+const getDetailedNodeChain = node => {
+  let result = [], extra;
   while (node && node.hasOwnProperty('syspath')) {
     extra = udev.getSysattrBySyspath(node.syspath);
-    for (var key in extra) {
+    for (let key in extra) {
       if (extra.hasOwnProperty(key)) {
         node[key] = extra[key];
       }
@@ -21,13 +22,13 @@ var getDetailedNodeChain = function (node) {
 };
 
 
-var getNodeDetailsSummary = function (node) {
-  var result = {},
+const getNodeDetailsSummary = node => {
+  let result = {},
     nodes = getDetailedNodeChain(node),
     key;
   while (nodes.length != 0) {
     node = nodes.pop();
-    for (key in node) {
+    for (let key in node) {
       if (node.hasOwnProperty(key)) {
         if (!result.hasOwnProperty(key)) {
           result[key] = [];
@@ -40,13 +41,10 @@ var getNodeDetailsSummary = function (node) {
 };
 
 
-udev.Monitor.prototype.__proto__ = EventEmitter.prototype;
 
 
 module.exports = {
-  monitor: function (subsystem) {
-    return new udev.Monitor(subsystem);
-  },
+  monitor: subsystem => new Monitor(subsystem),
   list: udev.list,
   getNodeParentBySyspath: udev.getNodeParentBySyspath,
   getSysattrBySyspath: udev.getSysattrBySyspath,

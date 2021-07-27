@@ -1,290 +1,242 @@
-#include <v8.h>
-#include <nan.h>
+#include <napi.h>
+#include <uv.h>
 
+#include "udev.h"
 #include <libudev.h>
 
-using namespace v8;
+Napi::FunctionReference Monitor::constructor;
 
-static struct udev *udev;
+namespace detail {
+void unref_udev(udev *up) { udev_unref(up); }
+void unref_udev_device(udev_device *dev) { udev_device_unref(dev); }
+void unref_udev_enumerate(udev_enumerate *e) { udev_enumerate_unref(e); }
+} // namespace detail
+using udev_ptr = typename std::unique_ptr<udev, decltype(&detail::unref_udev)>;
+using udev_device_ptr =
+    typename std::unique_ptr<udev_device, decltype(&detail::unref_udev_device)>;
+using udev_enumerate_ptr =
+    typename std::unique_ptr<udev_enumerate,
+                             decltype(&detail::unref_udev_enumerate)>;
 
-static void PushProperties(Local<Object> obj, struct udev_device* dev) {
-    struct udev_list_entry* sysattrs;
-    struct udev_list_entry* entry;
-    sysattrs = udev_device_get_properties_list_entry(dev);
-    udev_list_entry_foreach(entry, sysattrs) {
-        const char *name, *value;
-        name = udev_list_entry_get_name(entry);
-        value = udev_list_entry_get_value(entry);
-        if (value != NULL) {
-            obj->Set(Nan::New<String>(name).ToLocalChecked(), Nan::New<String>(value).ToLocalChecked());
-        } else {
-            obj->Set(Nan::New<String>(name).ToLocalChecked(), Nan::Null());
-        }
+Monitor::Monitor(const Napi::CallbackInfo &info)
+    : Napi::ObjectWrap<Monitor>(info) {
+
+  Napi::Env env = info.Env();
+  Napi::HandleScope scope(env);
+  emit_ = Napi::Persistent(
+      info.This().As<Napi::Object>().Get("emit").As<Napi::Function>());
+  instance_ = udev_new();
+  mon_ = udev_monitor_new_from_netlink(instance_, "udev");
+  fd_ = udev_monitor_get_fd(mon_);
+  poll_handle_ = new uv_poll_t;
+
+  if (info[0].IsString()) {
+    Napi::String subsystem = info[0].ToString();
+    int r;
+    r = udev_monitor_filter_add_match_subsystem_devtype(
+        mon_, subsystem.Utf8Value().c_str(), NULL);
+    if (r < 0) {
+      Napi::Error::New(env, "adding the subsystem filter failed")
+          .ThrowAsJavaScriptException();
     }
+  }
+
+  udev_monitor_enable_receiving(mon_);
+  poll_handle_->data =
+      new data_holder{Napi::Persistent(info.This().As<Napi::Object>())};
+
+  uv_poll_init(uv_default_loop(), poll_handle_, fd_);
+  uv_poll_start(poll_handle_, UV_READABLE, Monitor::on_handle_event);
 }
 
-static void PushSystemAttributes(Local<Object> obj, struct udev_device* dev) {
-    struct udev_list_entry* sysattrs;
-    struct udev_list_entry* entry;
-    sysattrs = udev_device_get_sysattr_list_entry(dev);
-    udev_list_entry_foreach(entry, sysattrs) {
-        const char *name, *value;
-        name = udev_list_entry_get_name(entry);
-        value = udev_device_get_sysattr_value(dev, name);
-        if (value != NULL) {
-            obj->Set(Nan::New<String>(name).ToLocalChecked(), Nan::New<String>(value).ToLocalChecked());
-        } else {
-            obj->Set(Nan::New<String>(name).ToLocalChecked(), Nan::Null());
-        }
-    }
+Monitor::~Monitor() {
+  uv_poll_stop(poll_handle_);
+  uv_close((uv_handle_t *)poll_handle_, on_handle_close);
+  udev_monitor_unref(mon_);
+  udev_unref(instance_);
 }
 
-class Monitor : public node::ObjectWrap {
-    struct poll_struct {
-      Nan::Persistent<Object> monitor;
-    };
+void Monitor::on_handle_event(uv_poll_t *handle, int status, int events) {
+  auto data = static_cast<data_holder *>(handle->data);
+  Napi::Env env = data->monitor.Env();
+  Napi::HandleScope scope(env);
 
-    uv_poll_t* poll_handle;
-    udev_monitor* mon;
-    int fd;
+  Monitor *wrapper = Napi::ObjectWrap<Monitor>::Unwrap(data->monitor.Value());
 
-    static void on_handle_event(uv_poll_t* handle, int status, int events) {
-        Nan::HandleScope scope;
-        poll_struct* data = (poll_struct*)handle->data;
-        Local<Object> monitor = Nan::New(data->monitor);
-        Monitor* wrapper = ObjectWrap::Unwrap<Monitor>(monitor);
-        udev_device* dev = udev_monitor_receive_device(wrapper->mon);
-        if (dev == NULL) {
-            return;
-        }
+  udev_device_ptr dev(udev_monitor_receive_device(wrapper->mon_),
+                      &detail::unref_udev_device);
+  if (!dev) {
+    return;
+  }
 
-        Local<Object> obj = Nan::New<Object>();
-        obj->Set(Nan::New<String>("syspath").ToLocalChecked(), Nan::New<String>(udev_device_get_syspath(dev)).ToLocalChecked());
-        PushProperties(obj, dev);
-
-        Local<Function> emit = monitor->Get(Nan::New<String>("emit").ToLocalChecked()).As<Function>();
-        Local<Value> emitArgs[2];
-        emitArgs[0] = Nan::New<String>(udev_device_get_action(dev)).ToLocalChecked();
-        emitArgs[1] = obj;
-        emit->Call(monitor, 2, emitArgs);
-
-        udev_device_unref(dev);
-    };
-
-    static NAN_METHOD(New) {
-        Nan::HandleScope scope;
-        uv_poll_t* handle;
-        Monitor* obj = new Monitor();
-        obj->Wrap(info.This());
-        obj->mon = udev_monitor_new_from_netlink(udev, "udev");
-        obj->fd = udev_monitor_get_fd(obj->mon);
-        obj->poll_handle = handle = new uv_poll_t;
-
-        if (info[0]->IsString()) {
-            v8::Local<v8::String> subsystem = info[0]->ToString();
-            int r;
-            r = udev_monitor_filter_add_match_subsystem_devtype(obj->mon,
-                    *Nan::Utf8String(subsystem), NULL);
-            if (r < 0) {
-                Nan::ThrowError("adding the subsystem filter failed");
-            }
-        }
-
-        udev_monitor_enable_receiving(obj->mon);
-        poll_struct* data = new poll_struct;
-        //NanAssignPersistent(data->monitor, info.This());
-        data->monitor.Reset(info.This());
-        handle->data = data;
-        uv_poll_init(uv_default_loop(), obj->poll_handle, obj->fd);
-        uv_poll_start(obj->poll_handle, UV_READABLE, on_handle_event);
-        //NanReturnThis();
-        return;
-    }
-
-    static void on_handle_close(uv_handle_t *handle) {
-        poll_struct* data = (poll_struct*)handle->data;
-        //NanDisposePersistent(data->monitor);
-        data->monitor.Reset();
-        delete data;
-        delete handle;
-    }
-
-    static NAN_METHOD(Close) {
-        Nan::HandleScope scope;
-        Monitor* obj = ObjectWrap::Unwrap<Monitor>(info.This());
-        uv_poll_stop(obj->poll_handle);
-        uv_close((uv_handle_t*)obj->poll_handle, on_handle_close);
-        udev_monitor_unref(obj->mon);
-        return;
-    }
-
-    public:
-    static void Init(Handle<Object> target) {
-        // I do not remember why the functiontemplate was tugged into a persistent.
-        static Nan::Persistent<FunctionTemplate> constructor;
-
-        //Local<FunctionTemplate> tpl = Nan::New<FunctionTemplate>(New);
-        Local<v8::FunctionTemplate> tpl = Nan::New<v8::FunctionTemplate>(New);
-        tpl->SetClassName(Nan::New<String>("Monitor").ToLocalChecked());
-        tpl->InstanceTemplate()->SetInternalFieldCount(1);
-        //NODE_SET_PROTOTYPE_METHOD(tpl, "close", Close);
-        Nan::SetPrototypeMethod(tpl, "close", Close);
-        //NanAssignPersistent(constructor, tpl);
-        constructor.Reset(tpl);
-
-        //target->Set(
-        Nan::Set(
-            target,
-            Nan::New<String>("Monitor").ToLocalChecked(), 
-            Nan::GetFunction(tpl).ToLocalChecked()
-        );
-    }
-};
-
-NAN_METHOD(List) {
-    Nan::HandleScope scope;
-    //NanScope();
-    Local<Array> list = Nan::New<Array>();
-    struct udev_enumerate* enumerate;
-    struct udev_list_entry* devices;
-    struct udev_list_entry* entry;
-    struct udev_device *dev;
-
-    enumerate = udev_enumerate_new(udev);
-    // add match etc. stuff.
-    if(info[0]->IsString()) {
-        v8::Local<v8::String> subsystem = info[0]->ToString();
-        udev_enumerate_add_match_subsystem(enumerate, *Nan::Utf8String(subsystem));
-    }
-    udev_enumerate_scan_devices(enumerate);
-    devices = udev_enumerate_get_list_entry(enumerate);
-
-    int i = 0;
-    udev_list_entry_foreach(entry, devices) {
-        const char *path;
-        path = udev_list_entry_get_name(entry);
-        dev = udev_device_new_from_syspath(udev, path);
-        Local<Object> obj = Nan::New<Object>();
-        PushProperties(obj, dev);
-
-        //obj->Set(
-        Nan::Set(
-            obj,
-            Nan::New<String>("syspath").ToLocalChecked(), 
-            Nan::New<String>(path).ToLocalChecked()
-        );
-
-        //list->Set(i++, obj);
-        Nan::Set(list, i++, obj);
-        udev_device_unref(dev);
-    }
-
-    udev_enumerate_unref(enumerate);
-    //NanReturnValue(list);
-    info.GetReturnValue().Set(list);
+  Napi::String device =
+      Napi::String::New(env, udev_device_get_action(dev.get()));
+  Napi::Object obj = Napi::Object::New(env);
+  obj.Set("syspath",
+          Napi::String::New(env, udev_device_get_syspath(dev.get())));
+  Udev::PushProperties(env, obj, dev.get());
+  wrapper->emit_.Call(data->monitor.Value(), {device, obj});
 }
 
-NAN_METHOD(GetNodeParentBySyspath) {
-    Nan::HandleScope scope;
-    //NanScope();
-    struct udev_device *dev;
-    struct udev_device *parentDev;
-
-    if(!info[0]->IsString()) {
-        Nan::ThrowTypeError("first argument must be a string");
-        return;
-    }
-
-    v8::Local<v8::String> string = info[0]->ToString();
-
-    dev = udev_device_new_from_syspath(udev, *Nan::Utf8String(string));
-    if (dev == NULL) {
-        Nan::ThrowError("device not found");
-        return;
-    }
-
-    parentDev = udev_device_get_parent(dev);
-    if(parentDev == NULL) {
-        udev_device_unref(dev);
-    }
-
-    Local<Object> obj = Nan::New<Object>();
-    PushProperties(obj, parentDev);
-    const char *path;
-    path = udev_device_get_syspath(parentDev);
-
-    if(!path) {
-        Nan::ThrowError("udev returned null syspath");
-        return;
-    }
-
-    //obj->Set(
-    Nan::Set(
-        obj,
-        Nan::New<String>("syspath").ToLocalChecked(), 
-        Nan::New<String>(path).ToLocalChecked()
-    );
-
-    udev_device_unref(dev);
-
-    //NanReturnValue(obj);
-    info.GetReturnValue().Set(obj);
+void Monitor::on_handle_close(uv_handle_t *handle) {
+  auto data = static_cast<data_holder *>(handle->data);
+  data->monitor.Reset();
+  delete data;
+  delete handle;
 }
 
-NAN_METHOD(GetSysattrBySyspath) {
-    Nan::HandleScope scope;
-    //NanScope();
-    struct udev_device *dev;
+Napi::Value Monitor::Close(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
 
-    if(!info[0]->IsString()) {
-      Nan::ThrowTypeError("first argument must be a string");
-        //NanReturnNull();
-        return;
-    }
-
-    v8::Local<v8::String> string = info[0]->ToString();
-
-    dev = udev_device_new_from_syspath(udev, *Nan::Utf8String(string));
-    if (dev == NULL) {
-      Nan::ThrowError("device not found");
-      return;
-    }
-
-    Local<Object> obj = Nan::New<Object>();
-    PushSystemAttributes(obj, dev);
-    obj->Set(Nan::New<String>("syspath").ToLocalChecked(), string);
-    udev_device_unref(dev);
-
-    //NanReturnValue(obj);
-    info.GetReturnValue().Set(obj);
+  Napi::HandleScope scope(env);
+  uv_poll_stop(poll_handle_);
+  uv_close((uv_handle_t *)poll_handle_, on_handle_close);
+  udev_monitor_unref(mon_);
+  return env.Undefined();
 }
 
-static void Init(Handle<Object> target) {
-    udev = udev_new();
+Napi::Object Monitor::Init(Napi::Env env, Napi::Object exports) {
+  Napi::HandleScope scope(env);
 
-    if (!udev) {
-      Nan::ThrowError("Can't create udev\n");
-      return;
-    }
+  Napi::Function func =
+      DefineClass(env, "Monitor", {InstanceMethod("close", &Monitor::Close)});
+  Monitor::constructor = Napi::Persistent(func);
+  Monitor::constructor.SuppressDestruct();
+  exports.Set("Monitor", func);
+  // env.SetInstanceData<Napi::FunctionReference>(constructor);
 
-    Nan::Set(
-        target,
-        Nan::New<String>("list").ToLocalChecked(),
-        Nan::GetFunction(Nan::New<v8::FunctionTemplate>(List)).ToLocalChecked()
-    );
-    Nan::Set(
-        target,
-        Nan::New<String>("getNodeParentBySyspath").ToLocalChecked(),
-        Nan::GetFunction(Nan::New<v8::FunctionTemplate>(GetNodeParentBySyspath)).ToLocalChecked()
-    );
-    //target->Set(
-    Nan::Set(
-        target,
-        Nan::New<String>("getSysattrBySyspath").ToLocalChecked(),
-        //Nan::New<FunctionTemplate>(GetSysattrBySyspath)->GetFunction());
-        Nan::GetFunction(Nan::New<v8::FunctionTemplate>(GetSysattrBySyspath)).ToLocalChecked()
-    );
-
-    Monitor::Init(target);
+  return exports;
 }
-NODE_MODULE(udev, Init)
+
+namespace Udev {
+
+void PushProperties(Napi::Env &env, Napi::Object obj, struct udev_device *dev) {
+  struct udev_list_entry *entry;
+  struct udev_list_entry *sysattrs = udev_device_get_properties_list_entry(dev);
+  udev_list_entry_foreach(entry, sysattrs) {
+    const char *name = udev_list_entry_get_name(entry);
+    const char *value = udev_list_entry_get_value(entry);
+    if (value != NULL) {
+      obj.Set(name, Napi::String::New(env, value));
+    } else {
+      obj.Set(name, env.Null());
+    }
+  }
+}
+
+Napi::Value List(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+  udev_ptr instance(udev_new(), &detail::unref_udev);
+
+  Napi::Array list = Napi::Array::New(env);
+  struct udev_list_entry *devices;
+  struct udev_list_entry *entry;
+
+  udev_enumerate_ptr enumerate(udev_enumerate_new(instance.get()),
+                               &detail::unref_udev_enumerate);
+  // add match etc. stuff.
+  if (info[0].IsString()) {
+    Napi::String subsystem = info[0].ToString();
+    udev_enumerate_add_match_subsystem(enumerate.get(),
+                                       subsystem.Utf8Value().c_str());
+  }
+  udev_enumerate_scan_devices(enumerate.get());
+  devices = udev_enumerate_get_list_entry(enumerate.get());
+
+  int index = 0;
+  udev_list_entry_foreach(entry, devices) {
+    const char *path = udev_list_entry_get_name(entry);
+    udev_device_ptr dev(udev_device_new_from_syspath(instance.get(), path),
+                        &detail::unref_udev_device);
+    Napi::Object obj = Napi::Object::New(env);
+    Udev::PushProperties(env, obj, dev.get());
+
+    obj.Set("syspath", Napi::String::New(env, path));
+    list.Set(index++, obj);
+  }
+
+  return list;
+}
+
+Napi::Value GetNodeParentBySyspath(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+  udev_ptr instance(udev_new(), &detail::unref_udev);
+
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "first argument must be a string")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  Napi::String string = info[0].ToString();
+  udev_device_ptr dev(
+      udev_device_new_from_syspath(instance.get(), string.Utf8Value().c_str()),
+      &detail::unref_udev_device);
+  if (!dev) {
+    Napi::Error::New(env, "device not found").ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  udev_device_ptr parentDev(udev_device_get_parent(dev.get()),
+                            &detail::unref_udev_device);
+  if (!parentDev) {
+    return env.Null();
+  }
+
+  Napi::Object obj = Napi::Object::New(env);
+  PushProperties(env, obj, parentDev.get());
+  const char *path = udev_device_get_syspath(parentDev.get());
+
+  if (!path) {
+    Napi::Error::New(env, "udev returned null syspath")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  obj.Set("syspath", Napi::String::New(env, path));
+
+  return obj;
+}
+
+void PushSystemAttributes(Napi::Env &env, Napi::Object obj,
+                          struct udev_device *dev) {
+  struct udev_list_entry *sysattrs;
+  struct udev_list_entry *entry;
+  sysattrs = udev_device_get_sysattr_list_entry(dev);
+  udev_list_entry_foreach(entry, sysattrs) {
+    const char *name = udev_list_entry_get_name(entry);
+    const char *value = udev_device_get_sysattr_value(dev, name);
+    if (value != nullptr) {
+      obj.Set(name, Napi::String::New(env, value));
+    } else {
+      obj.Set(name, env.Null());
+    }
+  }
+}
+
+Napi::Value GetSysattrBySyspath(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+  udev_ptr instance(udev_new(), &detail::unref_udev);
+
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "first argument must be a string")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  Napi::String string = info[0].ToString();
+
+  udev_device_ptr dev(
+      udev_device_new_from_syspath(instance.get(), string.Utf8Value().c_str()),
+      &detail::unref_udev_device);
+  if (!dev) {
+    Napi::Error::New(env, "device not found").ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  Napi::Object obj = Napi::Object::New(env);
+  PushSystemAttributes(env, obj, dev.get());
+  obj.Set(Napi::String::New(env, "syspath"), string);
+  return obj;
+}
+} // namespace Udev

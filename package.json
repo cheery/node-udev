@@ -20,7 +20,7 @@
     "url": "https://github.com/cheery/node-udev"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=10.0.0"
   },
   "keywords": [
     "udev",

@@ -2,7 +2,7 @@
 
 This library attempts to follow the libudev where it makes sense. I only needed some usb input device detection so I was happy with quite few features.
 
-Requires node-v0.8.0, nan and libudev.
+Requires node-v10.0.0, nan and libudev.
 
 ## Installation
 

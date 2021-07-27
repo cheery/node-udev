@@ -1,12 +1,19 @@
 {
   "name": "udev",
-  "version": "0.7.0",
+  "version": "1.0.0",
   "description": "Bindings to libudev",
   "main": "udev.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "node-gyp rebuild",
-    "clean": "node-gyp clean"
+    "clean": "node-gyp clean",
+    "install": "node-pre-gyp install --fallback-to-build"
+  },
+  "binary": {
+    "module_name": "udev",
+    "module_path": "./build/{node_abi}-{platform}-{arch}",
+    "package_name": "{node_abi}-{platform}-{arch}.tar.gz",
+    "host": "https:///"
   },
   "repository": {
     "type": "git",
@@ -30,7 +37,8 @@
     "node-gyp": "^3.7.0"
   },
   "dependencies": {
+    "@mapbox/node-pre-gyp": "^1.0.5",
     "bindings": "^1.5.0",
-    "node-addon-api": "^3.2.1"
+    "node-addon-api": "^4.0.0"
   }
 }

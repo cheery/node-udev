@@ -5,7 +5,9 @@
   "main": "udev.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "install": "node-pre-gyp reinstall --fallback-to-build"
+    "build": "node-gyp rebuild",
+    "clean": "node-gyp clean",
+    "install": "node-pre-gyp install --fallback-to-build"
   },
   "binary": {
     "module_name": "udev",
@@ -18,7 +20,7 @@
     "url": "https://github.com/cheery/node-udev"
   },
   "engines": {
-    "node": ">=0.8.0"
+    "node": ">=14.0.0"
   },
   "keywords": [
     "udev",
@@ -31,8 +33,12 @@
   "license": "BSD-2-Clause",
   "gypfile": true,
   "readmeFilename": "README.md",
+  "devDependencies": {
+    "node-gyp": "^3.7.0"
+  },
   "dependencies": {
     "@mapbox/node-pre-gyp": "^1.0.5",
+    "bindings": "^1.5.0",
     "node-addon-api": "^4.0.0"
   }
 }

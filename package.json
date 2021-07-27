@@ -34,7 +34,7 @@
   "gypfile": true,
   "readmeFilename": "README.md",
   "devDependencies": {
-    "node-gyp": "^3.7.0"
+    "node-gyp": "^8.1.0"
   },
   "dependencies": {
     "@mapbox/node-pre-gyp": "^1.0.5",

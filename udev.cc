@@ -169,27 +169,31 @@ Napi::Value GetNodeParentBySyspath(const Napi::CallbackInfo &info) {
   }
 
   Napi::String string = info[0].ToString();
+
   udev_device_ptr dev(
       udev_device_new_from_syspath(instance.get(), string.Utf8Value().c_str()),
       &detail::unref_udev_device);
+
   if (!dev) {
     Napi::Error::New(env, "device not found").ThrowAsJavaScriptException();
     return env.Null();
   }
 
-  udev_device_ptr parentDev(udev_device_get_parent(dev.get()),
-                            &detail::unref_udev_device);
+  udev_device *parentDev = udev_device_get_parent(dev.get());
+
   if (!parentDev) {
     return env.Null();
   }
 
   Napi::Object obj = Napi::Object::New(env);
-  PushProperties(env, obj, parentDev.get());
-  const char *path = udev_device_get_syspath(parentDev.get());
+
+  PushProperties(env, obj, parentDev);
+
+  const char *path = udev_device_get_syspath(parentDev);
 
   if (!path) {
     Napi::Error::New(env, "udev returned null syspath")
-        .ThrowAsJavaScriptException();
+      .ThrowAsJavaScriptException();
     return env.Null();
   }
 

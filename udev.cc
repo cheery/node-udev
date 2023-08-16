@@ -163,6 +163,45 @@ Napi::Value List(const Napi::CallbackInfo &info) {
   udev_enumerate_ptr enumerate(udev_enumerate_new(instance.get()),
                                &detail::unref_udev_enumerate);
   // add match etc. stuff.
+  std::vector<std::string> subsystem_filters = {};
+  std::vector<std::string> tag_filters = {};
+  if (info[0].IsString()) {
+    Napi::String subsystem = info[0].ToString();
+    subsystem_filters.push_back(subsystem.Utf8Value());
+  } else if (info[0].IsObject()) {
+    Napi::Object filters = info[0].ToObject();
+    if (filters.Has("subsystems")) {
+      Napi::Array subsystems = filters.Get("subsystems").As<Napi::Array>();
+      for (uint32_t i = 0; i < subsystems.Length(); i++) {
+        subsystem_filters.push_back(
+            static_cast<Napi::Value>(subsystems[i]).ToString().Utf8Value());
+      }
+    }
+    if (filters.Has("tags")) {
+      Napi::Array tags = filters.Get("tags").As<Napi::Array>();
+      for (uint32_t i = 0; i < tags.Length(); i++) {
+        tag_filters.push_back(
+            static_cast<Napi::Value>(tags[i]).ToString().Utf8Value());
+      }
+    }
+  }
+
+  for (std::string subsystem_filter : subsystem_filters) {
+    int r = udev_enumerate_add_match_subsystem(
+        enumerate.get(), subsystem_filter.c_str());
+    if (r < 0) {
+      Napi::Error::New(env, "adding subsystem filter failed")
+          .ThrowAsJavaScriptException();
+    }
+  }
+  for (std::string tag_filter : tag_filters) {
+    int r = udev_enumerate_add_match_tag(enumerate.get(), tag_filter.c_str());
+    if (r < 0) {
+      Napi::Error::New(env, "adding tag filter failed")
+          .ThrowAsJavaScriptException();
+    }
+  }
+
   if (info[0].IsString()) {
     Napi::String subsystem = info[0].ToString();
     udev_enumerate_add_match_subsystem(enumerate.get(),

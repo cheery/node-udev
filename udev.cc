@@ -30,13 +30,41 @@ Monitor::Monitor(const Napi::CallbackInfo &info)
   fd_ = udev_monitor_get_fd(mon_);
   poll_handle_ = new uv_poll_t;
 
+  std::vector<std::string> subsystem_filters = {};
+  std::vector<std::string> tag_filters = {};
   if (info[0].IsString()) {
     Napi::String subsystem = info[0].ToString();
-    int r;
-    r = udev_monitor_filter_add_match_subsystem_devtype(
-        mon_, subsystem.Utf8Value().c_str(), NULL);
+    subsystem_filters.push_back(subsystem.Utf8Value());
+  } else if (info[0].IsObject()) {
+    Napi::Object filters = info[0].ToObject();
+    if (filters.Has("subsystems")) {
+      Napi::Array subsystems = filters.Get("subsystems").As<Napi::Array>();
+      for (uint32_t i = 0; i < subsystems.Length(); i++) {
+        subsystem_filters.push_back(
+            static_cast<Napi::Value>(subsystems[i]).ToString().Utf8Value());
+      }
+    }
+    if (filters.Has("tags")) {
+      Napi::Array tags = filters.Get("tags").As<Napi::Array>();
+      for (uint32_t i = 0; i < tags.Length(); i++) {
+        tag_filters.push_back(
+            static_cast<Napi::Value>(tags[i]).ToString().Utf8Value());
+      }
+    }
+  }
+
+  for (std::string subsystem_filter : subsystem_filters) {
+    int r = udev_monitor_filter_add_match_subsystem_devtype(
+        mon_, subsystem_filter.c_str(), NULL);
     if (r < 0) {
-      Napi::Error::New(env, "adding the subsystem filter failed")
+      Napi::Error::New(env, "adding subsystem filter failed")
+          .ThrowAsJavaScriptException();
+    }
+  }
+  for (std::string tag_filter : tag_filters) {
+    int r = udev_monitor_filter_add_match_tag(mon_, tag_filter.c_str());
+    if (r < 0) {
+      Napi::Error::New(env, "adding tag filter failed")
           .ThrowAsJavaScriptException();
     }
   }

@@ -37,14 +37,14 @@ Monitor::Monitor(const Napi::CallbackInfo &info)
     subsystem_filters.push_back(subsystem.Utf8Value());
   } else if (info[0].IsObject()) {
     Napi::Object filters = info[0].ToObject();
-    if (filters.Has("subsystems")) {
+    if (filters.Has("subsystems") and not filters.Get("subsystems").IsUndefined()) {
       Napi::Array subsystems = filters.Get("subsystems").As<Napi::Array>();
       for (uint32_t i = 0; i < subsystems.Length(); i++) {
         subsystem_filters.push_back(
             static_cast<Napi::Value>(subsystems[i]).ToString().Utf8Value());
       }
     }
-    if (filters.Has("tags")) {
+    if (filters.Has("tags") and not filters.Get("tags").IsUndefined()) {
       Napi::Array tags = filters.Get("tags").As<Napi::Array>();
       for (uint32_t i = 0; i < tags.Length(); i++) {
         tag_filters.push_back(
@@ -170,14 +170,14 @@ Napi::Value List(const Napi::CallbackInfo &info) {
     subsystem_filters.push_back(subsystem.Utf8Value());
   } else if (info[0].IsObject()) {
     Napi::Object filters = info[0].ToObject();
-    if (filters.Has("subsystems")) {
+    if (filters.Has("subsystems") and not filters.Get("subsystems").IsUndefined()) {
       Napi::Array subsystems = filters.Get("subsystems").As<Napi::Array>();
       for (uint32_t i = 0; i < subsystems.Length(); i++) {
         subsystem_filters.push_back(
             static_cast<Napi::Value>(subsystems[i]).ToString().Utf8Value());
       }
     }
-    if (filters.Has("tags")) {
+    if (filters.Has("tags") and not filters.Get("tags").IsUndefined()) {
       Napi::Array tags = filters.Get("tags").As<Napi::Array>();
       for (uint32_t i = 0; i < tags.Length(); i++) {
         tag_filters.push_back(
